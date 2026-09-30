@@ -3,19 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="description" content="探索太阳、地球与月球的空间关系。可旋转的 3D 轨道、清晰的月球近景与八种月相。">
+<meta name="description" content="探索太阳、地球与月球的空间关系。可旋转的 3D 轨道、八种月相，以及月全食、月偏食和半影月食。">
 <meta name="theme-color" content="#080e18">
-<title>月相 · 3D 实验室</title>
+<title>月相与月食 · 3D 实验室</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='16' fill='%23e1ddcf'/%3E%3Ccircle cx='14' cy='14' r='16' fill='%23080e18'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="./style.css?v=4">
-<script src="./app.js?v=4" defer></script>
+<link rel="stylesheet" href="./style.css?v=5">
+<script src="./app.js?v=5" defer></script>
 </head>
 <body>
 <main id="moon-3d-lab">
   <header class="heading">
-    <div><div class="eyebrow">LUNAR OBSERVATORY <span>交互天文实验室</span></div><h1>月相<span class="title-dot"> · </span><span class="title-3d">3D</span></h1></div>
-    <p class="intro">月球没有变圆变缺，改变的是我们看见的亮区。<br><span>阳光始终照亮月球的一半，我们看见的部分不断改变。</span></p>
+    <div><div class="eyebrow">LUNAR OBSERVATORY <span>交互天文实验室</span></div><h1>月球<span class="title-dot"> · </span><span class="title-3d">3D</span></h1></div>
+    <p class="intro">探索日地月的光与影。<br><span>月相来自观察角度的变化，月食来自地球阴影的遮挡。</span></p>
   </header>
+  <nav class="mode-nav" aria-label="演示主题"><button type="button" data-mode="phase" aria-pressed="true" aria-controls="phase-demo">月相 · 为什么会圆缺</button><button type="button" data-mode="eclipse" aria-pressed="false" aria-controls="eclipse-demo">月食 · 地球的影子</button></nav>
+  <div id="phase-demo" data-phase-panel>
   <section class="lesson" aria-labelledby="lesson-title">
     <div class="lesson-heading"><div><div class="eyebrow">WHY THE MOON CHANGES</div><h2 id="lesson-title">两个半球重叠，形成我们看到的月相</h2></div><p>先点 ① → ② → ③，再拖动下方时间轴。</p></div>
     <div class="lesson-grid">
@@ -63,9 +65,25 @@
       <p class="learning-note">月相来自观察角度的变化。<br>地球的阴影会造成月食，而不是日常月相。</p>
     </aside>
   </div>
+  </div>
   <div data-error class="error" role="alert" hidden></div>
 
-  <footer><span>圆轨道与表面纹理为教学示意 · 天体大小、距离未按比例 · 不模拟月食</span><a href="https://science.nasa.gov/moon/moon-phases/" target="_blank" rel="noopener noreferrer">了解月相 ↗ NASA</a></footer>
+  <section id="eclipse-demo" hidden aria-labelledby="eclipse-title">
+    <div class="eclipse-heading"><div><div class="eyebrow">LUNAR ECLIPSE</div><h2 id="eclipse-title">月食：月球穿过地球的影子</h2></div><p>太阳 → 地球 → 月球，发生在满月附近。<br><span>拖动进程，观察影子怎样从月球的一侧扫过。</span></p></div>
+    <div class="eclipse-types" role="group" aria-label="选择月食类型"><button type="button" data-eclipse-type="total" aria-pressed="true">月全食</button><button type="button" data-eclipse-type="partial" aria-pressed="false">月偏食</button><button type="button" data-eclipse-type="penumbral" aria-pressed="false">半影月食</button><button type="button" data-eclipse-type="none" aria-pressed="false">满月不发生月食</button></div>
+    <div class="eclipse-workspace">
+      <section class="scene-panel" aria-label="三维地球阴影与月球轨迹"><div class="scene-bar"><h3>地球把影子投向背对太阳的一侧</h3><div class="view-switch"><button type="button" data-eclipse-camera="orbit" aria-pressed="true">立体视角</button><button type="button" data-eclipse-camera="top" aria-pressed="false">俯视轨迹</button></div></div>
+        <div class="eclipse-stage"><canvas class="eclipse-world" tabindex="0" role="img" aria-label="月球穿过地球本影和半影的三维过程">三维月食</canvas><span class="m3-label sun-label" data-eclipse-label="sun">太阳</span><span class="m3-label" data-eclipse-label="earth">地球</span><span class="m3-label moon-label" data-eclipse-label="moon">月球</span><span class="m3-label" data-eclipse-label="umbra">本影：直射阳光被完全挡住</span><span class="m3-label" data-eclipse-label="penumbra">半影：部分阳光被挡住</span><div class="shadow-key"><span><i class="umbra-key"></i>本影</span><span><i class="penumbra-key"></i>半影</span><span><i class="path-key"></i>月球轨迹</span></div><div class="scene-tools"><button type="button" data-eclipse-zoom="in" aria-label="放大月食场景">＋</button><button type="button" data-eclipse-zoom="out" aria-label="缩小月食场景">−</button><button type="button" data-eclipse-reset>复位</button></div></div>
+        <div class="scene-bottom"><span>拖动旋转 · 滚轮 / 双指缩放</span><label class="red-ray-toggle"><input type="checkbox" data-red-rays checked>显示穿过大气的红光路径</label></div>
+      </section>
+      <aside class="eclipse-observation"><div class="eyebrow">EARTH VIEW</div><h3>地球上的月食近景</h3><canvas class="eclipse-closeup" role="img" aria-label="从地球看到月面被阴影遮挡、变红的过程">月食近景</canvas><h4 data-eclipse-stage>正常满月</h4><div class="eclipse-coverage"><span>圆盘的本影覆盖（约）</span><strong data-eclipse-coverage>0%</strong></div><p data-eclipse-description>太阳光可以直接到达月球。</p><p class="eclipse-view-note">此处固定满月朝向，突出地球影子扫过月面的过程。</p></aside>
+    </div>
+    <section class="timeline eclipse-timeline" aria-label="月食进程"><div class="timeline-heading"><div><h3>一次月食的进程</h3><span data-eclipse-status>已暂停</span></div><div class="play-controls"><label class="sr-only" for="eclipse-speed">月食播放速度</label><select id="eclipse-speed"><option value="0.5">0.5×</option><option value="1" selected>1× · 24 秒 / 次</option><option value="2">2×</option></select><button type="button" class="play-button" data-eclipse-play aria-pressed="false">▶ 播放月食</button></div></div><label class="sr-only" for="eclipse-progress">月食进程</label><input type="range" id="eclipse-progress" min="0" max="1" step="0.001" value="0"><div class="time-scale" aria-hidden="true"><span>进入阴影前</span><span>食甚 · 最接近阴影中心</span><span>离开阴影后</span></div><div class="eclipse-contacts" role="group" aria-label="跳转到月食阶段"></div></section>
+    <div class="eclipse-offset"><div><label for="eclipse-offset">调整轨迹偏移：让月球穿过、擦过或避开影子</label><span data-offset-label>穿过本影中心</span></div><input type="range" id="eclipse-offset" min="0" max="3.4" step="0.01" value="0"><p>月球轨道与地球绕太阳公转的平面相差约 5°。满月时，月球通常从影子上方或下方经过，接近轨道交点时才可能发生月食。</p></div>
+    <div class="eclipse-explanation"><article><h3>月相与月食有什么不同？</h3><p>月相：受光半球中，有多少朝向地球。<br>月食：地球挡住了本来照向月球的太阳光。<br>月食中的阴影缺口，是地球影子的边缘。</p></article><article><h3>月全食为什么还会发红？</h3><p>部分阳光穿过地球大气并偏折到月球上。蓝紫光更容易被散射，留下的红橙光让月球显得暗红。红色光线路径与颜色为原理示意，实际颜色随大气状况变化。</p><a href="https://science.nasa.gov/moon/eclipses/" target="_blank" rel="noopener noreferrer">NASA 月食原理 ↗</a></article></div>
+    <p class="eclipse-model-note">天体大小、距离、阴影与轨迹位移均为缩放示意；进程为演示时间，不对应某次真实月食。</p><div class="sr-only" data-eclipse-announcement aria-live="polite"></div>
+  </section>
+  <footer><span>圆轨道与表面纹理为教学示意 · 天体大小、距离未按比例 · 月相与月食分别演示</span><a href="https://science.nasa.gov/moon/moon-phases/" target="_blank" rel="noopener noreferrer">了解月相 ↗ NASA</a></footer>
   <div class="sr-only" data-announcement aria-live="polite"></div>
   <noscript><p class="error">请开启 JavaScript 以查看和操作三维月相动画。</p></noscript>
 </main>
