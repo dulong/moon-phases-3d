@@ -4,7 +4,9 @@
   const canvas=q('.m3-world'),closeup=q('.m3-closeup'),slider=q('#m3-age'),play=q('[data-play]'),speedSelect=q('#m3-speed');
   const tau=Math.PI*2,cycle=29.5,radius=4.2;
   const phases=['新月','蛾眉月','上弦月','盈凸月','满月','亏凸月','下弦月','残月'];
-  const descriptions=['月球位于太阳与地球之间，朝向我们的半球几乎没有被照亮。','月球逐渐远离太阳方向，右侧出现一弯明亮的月牙。','从地球看，月球的右半面被阳光照亮。','月面大部分已经明亮，亮区继续增加。','地球位于太阳与月球之间，朝向我们的月面几乎全部明亮。','满月之后，右侧的亮区开始减少。','从地球看，月球的左半面被阳光照亮。','亮区继续缩小，只留下左侧一弯月牙。'];
+  const descriptions=['月球位于太阳与地球之间，朝向我们的半球几乎没有被照亮。','月球逐渐远离太阳方向，右侧出现一弯明亮的月牙。','从地球看，月球的右半面被阳光照亮。','月面大部分已经明亮，亮区继续增加。','太阳与月球位于地球两侧，朝向我们的月面几乎全部明亮。','满月之后，右侧的亮区开始减少。','从地球看，月球的左半面被阳光照亮。','亮区继续缩小，只留下左侧一弯月牙。'];
+  const hemisphere=q('.m3-hemisphere'),projection=q('.m3-projection'),projectionContext=projection.getContext('2d');
+  let lessonMode=3,aligned=false,eduAzimuth=.78,eduElevation=.42,eduCameraTween=null,eduBlend=0;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   let day=9.14,visualDay=day,speed=1,playing=false,view='orbit',azimuth=.32,elevation=.64,distance=14.2,previous=0,frameId,dirty=true,tween=null;
   const palette={moon:[.89,.87,.83],night:[.035,.047,.067],earth:[.045,.29,.61],land:[.16,.43,.25],cloud:[.87,.94,1],sun:[1,.77,.32],hot:[1,.32,.045],orbit:[.27,.44,.58],ray:[.95,.68,.26],sight:[.30,.83,.88]};
@@ -12,15 +14,17 @@
   const identity=()=>new Float32Array([1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]);
   function multiply(a,b) { const m=new Float32Array(16);for(let c=0;c<4;c++)for(let r=0;r<4;r++)for(let k=0;k<4;k++)m[c*4+r]+=a[k*4+r]*b[c*4+k];return m; }
   function perspective(fov,aspect) {const f=1/Math.tan(fov/2),n=.05,z=120;return new Float32Array([f/aspect,0,0,0,0,f,0,0,0,0,(z+n)/(n-z),-1,0,0,2*z*n/(n-z),0]);}
+  function orthographic(aspect){const y=2.02*Math.max(1,1/aspect),x=y*aspect;return new Float32Array([1/x,0,0,0,0,1/y,0,0,0,0,-2/120,0,0,0,-1,1]);}
   function lookAt(eye,target,up=[0,1,0]) {const z=unit(sub(eye,target)),x=unit(cross(up,z)),y=cross(z,x);return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,eye),-dot(y,eye),-dot(z,eye),1]);}
   function model(pos,size,rot=0) {const c=Math.cos(rot)*size,s=Math.sin(rot)*size;return new Float32Array([c,0,-s,0,0,size,0,0,s,0,c,0,...pos,1]);}
   function moonPosition() {const a=visualDay/cycle*tau;return [-radius*Math.cos(a),0,radius*Math.sin(a)];}
   const vertex=`precision mediump float;attribute vec3 aPosition;attribute vec3 aNormal;uniform mat4 uVP;uniform mat4 uModel;varying vec3 vLocal;varying vec3 vNormal;varying vec3 vWorld;void main(){vLocal=aPosition;vec4 world=uModel*vec4(aPosition,1.0);vWorld=world.xyz;vNormal=mat3(uModel)*aNormal;gl_Position=uVP*world;}`;
-  const fragment=`precision mediump float;varying vec3 vLocal;varying vec3 vNormal;varying vec3 vWorld;uniform vec3 uColor;uniform vec3 uSecond;uniform vec3 uCloud;uniform vec3 uNight;uniform vec3 uEye;uniform vec3 uLight;uniform vec4 uCraters[24];uniform float uKind;uniform float uAlpha;uniform mat4 uModel;
+  const fragment=`precision mediump float;varying vec3 vLocal;varying vec3 vNormal;varying vec3 vWorld;uniform vec3 uColor;uniform vec3 uSecond;uniform vec3 uCloud;uniform vec3 uNight;uniform vec3 uEye;uniform vec3 uLight;uniform vec4 uCraters[24];uniform float uKind;uniform float uAlpha;uniform float uExplain;uniform vec3 uToEarth;uniform mat4 uModel;
   float hash(vec3 p){p=fract(p*.3183099+vec3(.13,.71,.29));p*=17.0;return fract(p.x*p.y*p.z*(p.x+p.y+p.z));}
   float noise(vec3 x){vec3 p=floor(x),f=fract(x);f=f*f*(3.0-2.0*f);return mix(mix(mix(hash(p),hash(p+vec3(1,0,0)),f.x),mix(hash(p+vec3(0,1,0)),hash(p+vec3(1,1,0)),f.x),f.y),mix(mix(hash(p+vec3(0,0,1)),hash(p+vec3(1,0,1)),f.x),mix(hash(p+vec3(0,1,1)),hash(p+vec3(1,1,1)),f.x),f.y),f.z);}
   float fbm(vec3 p){return .55*noise(p)+.27*noise(p*2.03)+.12*noise(p*4.11)+.06*noise(p*8.17);}
   void main(){if(uKind>3.5){gl_FragColor=vec4(uColor,uAlpha);return;}vec3 p=normalize(vLocal),normal=normalize(vNormal),base=uColor;float grain=fbm(p*19.0);
+  if(uKind<.5&&uExplain>.5){float lit=step(0.0,dot(normal,normalize(uLight))),seen=step(0.0,dot(normal,normalize(uToEarth)));vec3 c=vec3(.075,.10,.15);if(uExplain<1.5)c=mix(c,vec3(.98,.62,.20),lit);else if(uExplain<2.5)c=mix(c,vec3(.16,.64,.76),seen);else{c=mix(c,vec3(.98,.62,.20),lit);c=mix(c,vec3(.16,.64,.76),seen*(1.0-lit));c=mix(c,vec3(.96,.93,.62),lit*seen);}float shape=.45+.55*max(0.0,dot(normal,normalize(uEye-vWorld)));gl_FragColor=vec4(c*shape,1.0);return;}
   if(uKind<.5){float maria=smoothstep(.38,.61,fbm(p*3.4+vec3(7.0)));base*=.54+.30*grain+.23*maria;vec3 bump=vec3(0);float texture=1.0;for(int i=0;i<24;i++){vec3 delta=p-uCraters[i].xyz;float r=uCraters[i].w,d=length(delta)/r;float pit=1.0-smoothstep(.1,.85,d);float rim=exp(-pow((d-.88)*9.0,2.0));texture*=1.0-.22*pit+.24*rim;bump+=delta/r*(pit*.29-rim*.22);}normal=normalize(normal+mat3(uModel)*bump);base*=texture;}
   else if(uKind<1.5){float land=smoothstep(.49,.54,fbm(p*3.7));base=mix(base,uSecond,land);float clouds=smoothstep(.60,.76,fbm(p*8.0+vec3(3.0)));float caps=smoothstep(.85,.98,abs(p.y));base=mix(base,uCloud,max(clouds*.8,caps*.85));}
   else{float detail=fbm(p*13.0);float edge=pow(max(0.0,dot(normal,normalize(uEye-vWorld))),.35);gl_FragColor=vec4(mix(uSecond,uColor,.55+.35*detail)*(.7+.3*edge),1.0);return;}
@@ -31,13 +35,13 @@
     const gl=element.getContext('webgl',{alpha:true,antialias:true,preserveDrawingBuffer:true});if(!gl)throw Error('当前设备没有提供 WebGL，无法显示 3D 场景。');
     function shader(type,source){const s=gl.createShader(type);gl.shaderSource(s,source);gl.compileShader(s);if(!gl.getShaderParameter(s,gl.COMPILE_STATUS))throw Error(gl.getShaderInfoLog(s));return s;}
     const program=gl.createProgram();gl.attachShader(program,shader(gl.VERTEX_SHADER,vertex));gl.attachShader(program,shader(gl.FRAGMENT_SHADER,fragment));gl.linkProgram(program);if(!gl.getProgramParameter(program,gl.LINK_STATUS))throw Error(gl.getProgramInfoLog(program));
-    gl.useProgram(program);const attrs={p:gl.getAttribLocation(program,'aPosition'),n:gl.getAttribLocation(program,'aNormal')},names=['VP','Model','Color','Second','Cloud','Night','Eye','Light','Kind','Alpha','Craters[0]'],u={};names.forEach(n=>u[n]=gl.getUniformLocation(program,'u'+n));
+    gl.useProgram(program);const attrs={p:gl.getAttribLocation(program,'aPosition'),n:gl.getAttribLocation(program,'aNormal')},names=['VP','Model','Color','Second','Cloud','Night','Eye','Light','Kind','Alpha','Explain','ToEarth','Craters[0]'],u={};names.forEach(n=>u[n]=gl.getUniformLocation(program,'u'+n));
     const pos=[],indices=[],cols=96,rows=64;for(let y=0;y<=rows;y++){const t=y/rows*Math.PI;for(let x=0;x<=cols;x++){const a=x/cols*tau;pos.push(Math.sin(t)*Math.cos(a),Math.cos(t),Math.sin(t)*Math.sin(a));}}for(let y=0;y<rows;y++)for(let x=0;x<cols;x++){const a=y*(cols+1)+x,b=a+cols+1;indices.push(a,b,a+1,a+1,b,b+1);}
     function buffer(data,target=gl.ARRAY_BUFFER){const b=gl.createBuffer();gl.bindBuffer(target,b);gl.bufferData(target,data,gl.STATIC_DRAW);return b;}
     const sphereBuffer=buffer(new Float32Array(pos)),indexBuffer=buffer(new Uint16Array(indices),gl.ELEMENT_ARRAY_BUFFER),lineBuffer=buffer(new Float32Array(600));
     function positions(b,normals=true){gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.enableVertexAttribArray(attrs.p);gl.vertexAttribPointer(attrs.p,3,gl.FLOAT,false,0,0);if(normals){gl.enableVertexAttribArray(attrs.n);gl.vertexAttribPointer(attrs.n,3,gl.FLOAT,false,0,0);}else{gl.disableVertexAttribArray(attrs.n);gl.vertexAttrib3f(attrs.n,0,1,0);}}
     const api={gl,vp:identity(),eye:[0,0,20],width:0,height:0,
-      begin(vp,eye){const dpr=Math.min(window.devicePixelRatio||1,2),w=Math.max(1,Math.round(element.clientWidth*dpr)),h=Math.max(1,Math.round(element.clientHeight*dpr));if(element.width!==w||element.height!==h){element.width=w;element.height=h;}api.width=element.clientWidth;api.height=element.clientHeight;api.vp=vp;api.eye=eye;gl.viewport(0,0,w,h);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(program);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniform3fv(u.Eye,eye);gl.uniform3fv(u.Light,[-1,0,0]);gl.uniform3fv(u.Night,palette.night);gl.uniform3fv(u.Cloud,palette.cloud);gl.uniform4fv(u['Craters[0]'],craterValues);},
+      begin(vp,eye,explain=0,toEarth=[1,0,0]){const dpr=Math.min(window.devicePixelRatio||1,2),w=Math.max(1,Math.round(element.clientWidth*dpr)),h=Math.max(1,Math.round(element.clientHeight*dpr));if(element.width!==w||element.height!==h){element.width=w;element.height=h;}api.width=element.clientWidth;api.height=element.clientHeight;api.vp=vp;api.eye=eye;gl.viewport(0,0,w,h);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(program);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniform3fv(u.Eye,eye);gl.uniform3fv(u.Light,[-1,0,0]);gl.uniform1f(u.Explain,explain);gl.uniform3fv(u.ToEarth,toEarth);gl.uniform3fv(u.Night,palette.night);gl.uniform3fv(u.Cloud,palette.cloud);gl.uniform4fv(u['Craters[0]'],craterValues);},
       sphere(p,size,kind,color,second,rot=0){positions(sphereBuffer);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);gl.uniformMatrix4fv(u.Model,false,model(p,size,rot));gl.uniform1f(u.Kind,kind);gl.uniform1f(u.Alpha,1);gl.uniform3fv(u.Color,color);gl.uniform3fv(u.Second,second||color);gl.drawElements(gl.TRIANGLES,indices.length,gl.UNSIGNED_SHORT,0);},
       lines(points,color,loop=false,alpha=1){positions(lineBuffer,false);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(points),gl.DYNAMIC_DRAW);gl.uniformMatrix4fv(u.Model,false,identity());gl.uniform1f(u.Kind,4);gl.uniform1f(u.Alpha,alpha);gl.uniform3fv(u.Color,color);gl.drawArrays(loop?gl.LINE_LOOP:gl.LINES,0,points.length/3);},
       project(p){const m=api.vp,v=[...p,1],r=[0,0,0,0];for(let i=0;i<4;i++)for(let k=0;k<4;k++)r[i]+=m[k*4+i]*v[k];return {x:(r[0]/r[3]+1)*api.width/2,y:(1-r[1]/r[3])*api.height/2,visible:r[3]>0};},
@@ -46,8 +50,8 @@
     return api;
   }
 
-  let world,observer;
-  try {world=Renderer(canvas);observer=Renderer(closeup);}catch(e){q('[data-error]').hidden=false;q('[data-error]').textContent=e.message;root.dataset.failed='true';play.disabled=true;return;}
+  let world,observer,educator;
+  try {world=Renderer(canvas);observer=Renderer(closeup);educator=Renderer(hemisphere);}catch(e){q('[data-error]').hidden=false;q('[data-error]').textContent=e.message;root.dataset.failed='true';play.disabled=true;return;}
   const orbit=[];
   for(let i=0;i<192;i++){const a=i/192*tau;orbit.push(radius*Math.cos(a),0,radius*Math.sin(a));}
   const grid=[];
@@ -67,17 +71,65 @@
       world.lines(ticks,palette.orbit,false,.9);
       const rays=[];[-4.8,4.8].forEach(z=>rays.push(-5.8,0,z,5,0,z,5,0,z,4.65,0,z-.14,5,0,z,4.65,0,z+.14));
       world.lines(rays,palette.ray,false,.55);
-      world.lines([0,0,0,...moon],palette.sight,false,.5);
+
       world.sphere([-7.2,0,0],1.35,2,palette.sun,palette.hot);
       world.sphere([0,0,0],1.05,1,palette.earth,palette.land,visualDay/cycle*tau*3);
     }
     world.sphere(moon,.77,0,palette.moon,palette.moon,rot);
+    const direction=unit(moon),person=direction.map(v=>v*1.13);
+    if(view!=='earth'){
+      world.sphere(person,.07,2,palette.sight,palette.sight);
+      const u=unit(cross(direction,[0,1,0])),v=cross(u,direction),sight=[];
+      const start=person,end=sub(moon,direction.map(x=>x*.77));sight.push(...start,...end);
+      for(let i=0;i<4;i++){const a=i/4*tau,point=moon.map((x,k)=>x+.77*(u[k]*Math.cos(a)+v[k]*Math.sin(a)));sight.push(...start,...point);}
+      world.lines(sight,palette.sight,false,.72);
+    }
+    label('observer',person.map((x,i)=>x+(i===1?.18:0)));
     label('sun',[-7.2,-1.65,0]);label('earth',[0,-1.34,0]);label('moon',[moon[0],-.99,moon[2]]);
     observer.begin(multiply(perspective(.435,closeup.clientWidth/closeup.clientHeight),lookAt([0,0,0],moon)),[0,0,0]);
     observer.sphere(moon,.77,0,palette.moon,palette.moon,rot);
+    renderLesson(moon);
     root.dataset.angle=azimuth.toFixed(4);root.dataset.distance=distance.toFixed(3);root.dataset.view=view;root.dataset.visualDay=visualDay.toFixed(4);
     dirty=false;
   }
+
+  function educationEye(toEarth){
+    const ca=Math.cos(eduAzimuth),sa=Math.sin(eduAzimuth),ce=Math.cos(eduElevation);
+    const outside=unit([(toEarth[0]*ca+toEarth[2]*sa)*ce,Math.sin(eduElevation),(-toEarth[0]*sa+toEarth[2]*ca)*ce]);
+    let t=eduBlend;if(eduCameraTween){const k=Math.min(1,(performance.now()-eduCameraTween.start)/650),e=k*k*(3-2*k);t=eduCameraTween.from+(eduCameraTween.to-eduCameraTween.from)*e;eduBlend=t;if(k===1)eduCameraTween=null;}
+    // Spherical interpolation preserves camera distance as the observer moves around the moon.
+    const cosine=Math.max(-1,Math.min(1,dot(outside,toEarth))),angle=Math.acos(cosine);
+    let d;if(t===1)d=toEarth;else if(angle<.001)d=outside;else if(cosine<-.999){const axis=unit(cross(outside,[0,1,0]));d=outside.map((x,i)=>x*Math.cos(Math.PI*t)+axis[i]*Math.sin(Math.PI*t));}else{const denom=Math.sin(angle);d=outside.map((x,i)=>(x*Math.sin((1-t)*angle)+toEarth[i]*Math.sin(t*angle))/denom);}
+    return unit(d).map(x=>x*7);
+  }
+  function renderLesson(moon){
+    const toEarth=unit(moon.map(x=>-x)),eye=educationEye(toEarth),w=hemisphere.clientWidth,h=hemisphere.clientHeight;
+    educator.begin(multiply(orthographic(w/h),lookAt(eye,[0,0,0])),eye,lessonMode,toEarth);
+    educator.sphere([0,0,0],1.18,0,palette.moon,palette.moon);
+    const border=[],u=unit(cross(toEarth,[0,1,0])),v=cross(toEarth,u);
+    for(let i=0;i<128;i++){const a=i/128*tau;border.push(...u.map((x,k)=>1.195*(x*Math.cos(a)+v[k]*Math.sin(a))));}
+    if(lessonMode!==1)educator.lines(border,palette.sight,true,.9);
+    const arrows=[];[-.62,0,.62].forEach(z=>arrows.push(-2.2,0,z,-1.35,0,z,-1.35,0,z,-1.52,0,z-.08,-1.35,0,z,-1.52,0,z+.08));
+    if(!aligned)educator.lines(arrows,palette.ray,false,.8);
+    const eyeMark=toEarth.map(x=>x*2.05);if(!aligned){educator.sphere(eyeMark,.10,2,palette.sight,palette.sight);educator.lines([...eyeMark,...toEarth.map(x=>x*1.24)],palette.sight,false,.8);}
+    const earthLabel=educator.project(eyeMark),sunLabel=educator.project([-2.12,0,0]);
+    for(const [el,p] of [[q('[data-edu-earth]'),{...earthLabel,y:earthLabel.y+8}],[q('[data-edu-sun]'),{...sunLabel,y:sunLabel.y-42}]]){el.hidden=!p.visible||p.x<12||p.x>w-12;el.style.left=Math.max(58,Math.min(w-70,p.x))+'px';el.style.top=Math.max(16,Math.min(h-24,p.y+17))+'px';}
+    q('[data-edu-earth]').hidden=aligned||q('[data-edu-earth]').hidden;
+    q('[data-edu-sun]').hidden=aligned||q('[data-edu-sun]').hidden;
+    root.dataset.lesson=lessonMode;root.dataset.aligned=String(aligned);
+    renderProjection();
+  }
+  let lastProjection='';
+  function renderProjection(){
+    const width=240,percent=Math.round((1-Math.cos(visualDay/cycle*tau))*50),key=visualDay.toFixed(3);
+    if(lastProjection===key)return;lastProjection=key;projection.width=projection.height=width;
+    const im=projectionContext.createImageData(width,width),a=visualDay/cycle*tau;
+    for(let y=0;y<width;y++)for(let x=0;x<width;x++){const px=(x+.5-width/2)/(width*.45),py=(width/2-y-.5)/(width*.45),r2=px*px+py*py;if(r2>1)continue;const z=Math.sqrt(1-r2),light=px*Math.sin(a)-z*Math.cos(a),color=light>0?[245,237,158]:[41,163,194],j=(y*width+x)*4;im.data[j]=color[0];im.data[j+1]=color[1];im.data[j+2]=color[2];im.data[j+3]=255;}
+    projectionContext.putImageData(im,0,0);text(q('[data-projected-light]'),percent+'%');
+    let reason;if(percent===0)reason='受光半球在背面；我们看见的这一面几乎全暗。';else if(percent===100)reason='受光半球朝向地球；我们看见的圆盘几乎全亮。';else if(percent===50)reason='受光与可见的半球部分重叠；圆盘一半亮、一半暗。';else reason=percent<50?'只有少量受光区域朝向地球，投影成一弯月牙。':'大部分受光区域朝向地球，圆盘的亮区超过一半。';
+    text(q('[data-projection-reason]'),reason);attr(projection,'aria-label',`地球视线下的圆盘投影，亮区占 ${percent}%，浅黄色为可见亮区，蓝色为可见暗区`);
+  }
+
   // Quarter phases span a small observation window. They no longer flash for one frame.
   function phaseIndex(){const t=((day/cycle)%1+1)%1;const e=.012;
     if(t<e||t>1-e)return 0;if(Math.abs(t-.25)<e)return 2;if(Math.abs(t-.5)<e)return 4;if(Math.abs(t-.75)<e)return 6;
@@ -113,6 +165,15 @@
     else{tween=null;visualDay=day;}
     sync();announce();save();
   }
+  q('[data-align]').addEventListener('click',()=>{eduCameraTween=reduced.matches?null:{from:eduBlend,to:1,start:performance.now()};aligned=true;if(reduced.matches)eduBlend=1;attr(q('[data-align]'),'aria-pressed',true);lessonMode=3;syncLessonButtons();dirty=true;});
+  q('[data-outside]').addEventListener('click',()=>{eduCameraTween=reduced.matches?null:{from:eduBlend,to:0,start:performance.now()};aligned=false;if(reduced.matches)eduBlend=0;attr(q('[data-align]'),'aria-pressed',false);dirty=true;});
+  function syncLessonButtons(){root.querySelectorAll('[data-lesson]').forEach(b=>attr(b,'aria-pressed',Number(b.dataset.lesson)===lessonMode));root.classList.toggle('single-hemisphere',lessonMode!==3);}
+  root.querySelectorAll('[data-lesson]').forEach(b=>b.addEventListener('click',()=>{lessonMode=Number(b.dataset.lesson);syncLessonButtons();dirty=true;}));
+  root.querySelectorAll('[data-example]').forEach(b=>b.addEventListener('click',()=>{lessonMode=3;syncLessonButtons();selectDay(Number(b.dataset.example)*cycle,true);}));
+  let eduPointer=null;hemisphere.addEventListener('pointerdown',e=>{hemisphere.setPointerCapture(e.pointerId);eduPointer={id:e.pointerId,x:e.clientX,y:e.clientY};});
+  hemisphere.addEventListener('pointermove',e=>{if(!eduPointer||e.pointerId!==eduPointer.id)return;aligned=false;eduCameraTween=null;eduBlend=0;attr(q('[data-align]'),'aria-pressed',false);eduAzimuth-=(e.clientX-eduPointer.x)*.009;eduElevation=Math.max(-1.3,Math.min(1.3,eduElevation+(e.clientY-eduPointer.y)*.009));eduPointer={id:e.pointerId,x:e.clientX,y:e.clientY};dirty=true;});
+  hemisphere.addEventListener('pointerup',()=>eduPointer=null);hemisphere.addEventListener('pointercancel',()=>eduPointer=null);
+  hemisphere.addEventListener('keydown',e=>{if(!['ArrowLeft','ArrowRight'].includes(e.key))return;e.preventDefault();aligned=false;eduCameraTween=null;eduBlend=0;eduAzimuth+=(e.key==='ArrowLeft'?-.15:.15);attr(q('[data-align]'),'aria-pressed',false);dirty=true;});
   views.forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;sync();save();}));
   turns.forEach(b=>b.addEventListener('click',()=>{view='orbit';azimuth+=Number(b.dataset.turn)*.25;sync();save();}));
   q('[data-reset]').addEventListener('click',()=>{view='orbit';azimuth=.32;elevation=.64;distance=14.2;sync();save();});
@@ -126,12 +187,12 @@
   const end=e=>{pointers.delete(e.pointerId);oldPinch=0;save();};canvas.addEventListener('pointerup',end);canvas.addEventListener('pointercancel',end);
   let zoomTimer;canvas.addEventListener('wheel',e=>{if(view==='earth')return;e.preventDefault();distance=Math.max(9.5,Math.min(24,distance*Math.exp(e.deltaY*.001)));dirty=true;clearTimeout(zoomTimer);zoomTimer=setTimeout(save,200);},{passive:false});
   canvas.addEventListener('keydown',e=>{if(view==='earth')return;const directions={ArrowLeft:-.15,ArrowRight:.15};if(e.key in directions){e.preventDefault();azimuth+=directions[e.key];dirty=true;save();}});
-  const sizeObserver=new ResizeObserver(()=>dirty=true);sizeObserver.observe(canvas);sizeObserver.observe(closeup);
+  const sizeObserver=new ResizeObserver(()=>dirty=true);sizeObserver.observe(canvas);sizeObserver.observe(closeup);sizeObserver.observe(hemisphere);
   reduced.addEventListener('change',e=>{if(e.matches){playing=false;tween=null;visualDay=day;sync();}});
   restore();sync();render();
   function animate(now){if(playing&&previous&&!document.hidden){day=(day+Math.min(now-previous,80)*cycle/36000*speed)%cycle;visualDay=day;sync();}
     if(tween){const t=Math.min(1,(now-tween.start)/tween.duration),ease=t*t*(3-2*t);visualDay=tween.from+tween.delta*ease;dirty=true;if(t===1){tween=null;visualDay=day;text(q('[data-status]'),'已暂停 · 选择后保持当前月相');}}
-    previous=now;if(dirty)render();frameId=requestAnimationFrame(animate);
+    previous=now;if(eduCameraTween)dirty=true;if(dirty)render();frameId=requestAnimationFrame(animate);
   }
   frameId=requestAnimationFrame(animate);
   window.addEventListener('pagehide',()=>{save();},{once:true});

@@ -7,15 +7,40 @@
 <meta name="theme-color" content="#080e18">
 <title>月相 · 3D 实验室</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Ccircle cx='20' cy='20' r='16' fill='%23e1ddcf'/%3E%3Ccircle cx='14' cy='14' r='16' fill='%23080e18'/%3E%3C/svg%3E">
-<link rel="stylesheet" href="./style.css?v=3">
-<script src="./app.js?v=3" defer></script>
+<link rel="stylesheet" href="./style.css?v=4">
+<script src="./app.js?v=4" defer></script>
 </head>
 <body>
 <main id="moon-3d-lab">
   <header class="heading">
     <div><div class="eyebrow">LUNAR OBSERVATORY <span>交互天文实验室</span></div><h1>月相<span class="title-dot"> · </span><span class="title-3d">3D</span></h1></div>
-    <p class="intro">转动视角，看见月相背后的空间关系。<br><span>阳光始终照亮月球的一半，我们看见的部分不断改变。</span></p>
+    <p class="intro">月球没有变圆变缺，改变的是我们看见的亮区。<br><span>阳光始终照亮月球的一半，我们看见的部分不断改变。</span></p>
   </header>
+  <section class="lesson" aria-labelledby="lesson-title">
+    <div class="lesson-heading"><div><div class="eyebrow">WHY THE MOON CHANGES</div><h2 id="lesson-title">两个半球重叠，形成我们看到的月相</h2></div><p>先点 ① → ② → ③，再拖动下方时间轴。</p></div>
+    <div class="lesson-grid">
+      <div class="hemisphere-panel">
+        <div class="hemisphere-stage"><canvas class="m3-hemisphere" role="img" aria-label="月球受光半球与朝向地球半球的三维交集" tabindex="0">两个半球的三维示意</canvas><span class="edu-label" data-edu-sun>太阳光</span><span class="edu-label observer-label" data-edu-earth>👁 地球方向</span></div>
+        <div class="hemisphere-controls"><button type="button" data-align aria-pressed="false">沿地球视线看过去 →</button><button type="button" data-outside>回到侧面看</button></div>
+        <p class="model-caption">同一个月球的放大示意 · 拖动可以旋转</p>
+      </div>
+      <div class="lesson-steps" role="group" aria-label="分步理解月相">
+        <button type="button" data-lesson="1" aria-pressed="false"><span class="step-number warm">①</span><span><strong>太阳照亮哪一半？</strong><small>面向太阳的半球始终受光，约占整个球面 50%。</small></span></button>
+        <button type="button" data-lesson="2" aria-pressed="false"><span class="step-number cool">②</span><span><strong>地球上的人能看哪一半？</strong><small>只能看见朝向地球的半球，背面被月球自身挡住。</small></span></button>
+        <button type="button" data-lesson="3" aria-pressed="true"><span class="step-number overlap">③</span><span><strong>两部分重叠在哪里？</strong><small>同时受光、又朝向地球的区域，才是我们眼中的亮区。</small></span></button>
+        <div class="hemisphere-legend"><span><i class="swatch warm"></i>受光、背向地球</span><span><i class="swatch cool"></i>朝向地球、未受光</span><span><i class="swatch overlap"></i>同时受光和可见</span><span><i class="swatch hidden-side"></i>未受光且背向地球</span></div>
+      </div>
+      <div class="projection-panel"><div class="eyebrow">WHAT YOU SEE</div><h3>从地球看成一个圆盘</h3><canvas class="m3-projection" role="img" aria-label="从地球看见的亮区与暗区投影">月相圆盘投影</canvas><p class="projection-percent"><strong data-projected-light>68%</strong> 的圆盘是亮区</p><p class="projection-reason" data-projection-reason></p><span class="projection-note">颜色用于解释原理，真实月面见下方近景。</span></div>
+    </div>
+    <div class="lesson-examples" role="group" aria-label="比较典型月相"><span>试着比较：</span><button type="button" data-example="0">新月：亮面背向我们</button><button type="button" data-example="0.25">上弦月：看见一半亮区</button><button type="button" data-example="0.5">满月：亮面朝向我们</button></div>
+    <p class="lesson-conclusion">月球绕地球公转 → 我们的视线与太阳光的夹角改变 → 可见亮区的形状改变。<span>月球总受光约 50% ≠ 我们眼中圆盘总是 50% 明亮。</span></p>
+  </section>
+  <section class="timeline" aria-label="月相时间与播放控制">
+    <div class="timeline-heading"><div><h2>一轮月相</h2><span data-status>已暂停 · 选择后保持当前月相</span></div><div class="play-controls"><label class="sr-only" for="m3-speed">播放速度</label><select id="m3-speed"><option value="0.5">0.5×</option><option value="1" selected>1× · 36 秒 / 轮</option><option value="2">2×</option></select><button type="button" class="play-button" data-play aria-pressed="false">▶ 播放</button></div></div>
+    <label class="sr-only" for="m3-age">距新月的天数</label><input type="range" id="m3-age" min="0" max="29.5" step="0.01" value="9.14" aria-label="距新月的天数">
+    <div class="time-scale" aria-hidden="true"><span>0 天 · 新月</span><span>7.4 天</span><span>14.8 天 · 满月</span><span>22.1 天</span><span>29.5 天</span></div>
+    <div class="m3-presets" role="group" aria-label="选择月相"></div>
+  </section>
   <div class="workspace">
     <section class="scene-panel" aria-label="三维轨道观察">
       <div class="scene-bar"><h2 data-view-title>日 · 地 · 月的空间关系</h2><div class="view-switch" role="group" aria-label="观察视角">
@@ -23,28 +48,23 @@
       </div></div>
       <div class="m3-stage">
         <canvas class="m3-world" tabindex="0" role="img" aria-label="可旋转的三维日地月场景">三维日地月场景</canvas>
-        <span class="m3-label sun-label" data-label="sun">太阳</span><span class="m3-label" data-label="earth">地球</span><span class="m3-label moon-label" data-label="moon">月球</span>
-        <div class="light-key"><span></span>太阳光方向 →</div>
+        <span class="m3-label sun-label" data-label="sun">太阳</span><span class="m3-label" data-label="earth">地球</span><span class="m3-label moon-label" data-label="moon">月球</span><span class="m3-label observer-label" data-label="observer">👁 地球观察者</span>
+        <div class="light-key"><span></span>金色线：太阳光 <b>青色线：地球上的观察视线</b></div>
         <div class="scene-tools" role="group" aria-label="调整镜头"><button type="button" data-zoom-in aria-label="放大">＋</button><button type="button" data-zoom-out aria-label="缩小">−</button><button type="button" data-reset>复位</button></div>
       </div>
       <div class="scene-bottom"><span data-hint>拖动旋转 · 滚轮 / 双指缩放</span><div><button type="button" data-turn="-1" aria-label="向左旋转视角">↶ 左转</button><button type="button" data-turn="1" aria-label="向右旋转视角">右转 ↷</button></div></div>
     </section>
     <aside class="observation" aria-label="地球上的月相近景">
-      <div class="eyebrow">EARTH VIEW</div><h2>地球上的月相</h2>
+      <div class="eyebrow">EARTH VIEW</div><h2>观察视线对应的真实月面</h2>
       <div class="closeup-stage"><canvas class="m3-closeup" role="img" aria-label="从地球观察的三维月球球面">地球视角的月相</canvas><span class="orientation">北半球标准朝向</span></div>
       <div class="phase-heading"><h3 data-phase>盈凸月</h3><span class="phase-badge">月球近景</span></div>
-      <div class="metrics"><div><span class="metric-label">可见月面照亮</span><div><strong data-light>68%</strong></div></div><div><span class="metric-label">距新月</span><div><strong data-age>9.1</strong><span class="metric-unit"> 天</span></div></div></div>
+      <div class="metrics"><div><span class="metric-label">月面圆盘的亮区</span><div><strong data-light>68%</strong></div></div><div><span class="metric-label">距新月</span><div><strong data-age>9.1</strong><span class="metric-unit"> 天</span></div></div></div>
       <p class="explanation" data-description>月面大部分已经明亮，亮区继续增加。</p>
       <p class="learning-note">月相来自观察角度的变化。<br>地球的阴影会造成月食，而不是日常月相。</p>
     </aside>
   </div>
   <div data-error class="error" role="alert" hidden></div>
-  <section class="timeline" aria-label="月相时间与播放控制">
-    <div class="timeline-heading"><div><h2>一轮月相</h2><span data-status>已暂停 · 选择后保持当前月相</span></div><div class="play-controls"><label class="sr-only" for="m3-speed">播放速度</label><select id="m3-speed"><option value="0.5">0.5×</option><option value="1" selected>1× · 36 秒 / 轮</option><option value="2">2×</option></select><button type="button" class="play-button" data-play aria-pressed="false">▶ 播放</button></div></div>
-    <label class="sr-only" for="m3-age">距新月的天数</label><input type="range" id="m3-age" min="0" max="29.5" step="0.01" value="9.14" aria-label="距新月的天数">
-    <div class="time-scale" aria-hidden="true"><span>0 天 · 新月</span><span>7.4 天</span><span>14.8 天 · 满月</span><span>22.1 天</span><span>29.5 天</span></div>
-    <div class="m3-presets" role="group" aria-label="选择月相"></div>
-  </section>
+
   <footer><span>圆轨道与表面纹理为教学示意 · 天体大小、距离未按比例 · 不模拟月食</span><a href="https://science.nasa.gov/moon/moon-phases/" target="_blank" rel="noopener noreferrer">了解月相 ↗ NASA</a></footer>
   <div class="sr-only" data-announcement aria-live="polite"></div>
   <noscript><p class="error">请开启 JavaScript 以查看和操作三维月相动画。</p></noscript>
