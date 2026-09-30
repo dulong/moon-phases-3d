@@ -9,8 +9,14 @@
   let lessonMode=3,aligned=false,eduAzimuth=.78,eduElevation=.42,eduCameraTween=null,eduBlend=0;
   let activeMode='phase',eclipse=null;
   let nodeAngle=Math.PI/2,showOrbitShadow=true;
+  const year=365.25,earthRate=tau/year,nodeRate=tau/(year*18.6),earthEpoch=(earthRate+nodeRate)*cycle*3.5-Math.PI/2;
+  let motion='annual',yearTime=cycle/2,annualRenderer=null;
+  const earthAngleAt=t=>earthEpoch-earthRate*t;
+  const nodeAngleAt=t=>Math.PI/2+earthAngleAt(t)-nodeRate*t;
   const inclination=5.1*Math.PI/180,verticalScale=12,phaseMoonRadius=.77;
-  const orbitShadow=[1,1.05,(1.35-1.05)/7.2,(1.35+1.05)/7.2];
+  const manualShadow=[1,1.05,(1.35-1.05)/7.2,(1.35+1.05)/7.2],annualShadow=[1,1.05,(1.35-1.05)/7.2,.05];
+  let orbitShadow=annualShadow;
+  const moonRadius=()=>motion==='annual'?.287:phaseMoonRadius;
   const reduced=matchMedia('(prefers-reduced-motion: reduce)');
   let day=14.75,visualDay=day,speed=1,playing=false,view='orbit',azimuth=.32,elevation=.64,distance=14.2,previous=0,frameId,dirty=true,tween=null;
   const palette={moon:[.89,.87,.83],night:[.035,.047,.067],earth:[.045,.29,.61],land:[.16,.43,.25],cloud:[.87,.94,1],sun:[1,.77,.32],hot:[1,.32,.045],orbit:[.27,.44,.58],ray:[.95,.68,.26],sight:[.30,.83,.88]};
@@ -21,14 +27,14 @@
   function orthographic(aspect){const y=2.02*Math.max(1,1/aspect),x=y*aspect;return new Float32Array([1/x,0,0,0,0,1/y,0,0,0,0,-2/120,0,0,0,-1,1]);}
   function lookAt(eye,target,up=[0,1,0]) {const z=unit(sub(eye,target)),x=unit(cross(up,z)),y=cross(z,x);return new Float32Array([x[0],y[0],z[0],0,x[1],y[1],z[1],0,x[2],y[2],z[2],0,-dot(x,eye),-dot(y,eye),-dot(z,eye),1]);}
   function model(pos,size,rot=0) {const c=Math.cos(rot)*size,s=Math.sin(rot)*size;return new Float32Array([c,0,-s,0,0,size,0,0,s,0,c,0,...pos,1]);}
-  function orbitPosition(a){const x=-radius*Math.cos(a),z=radius*Math.sin(a),c=Math.cos(nodeAngle),s=-Math.sin(nodeAngle),u=x*c+z*s,v=-x*s+z*c;return [u*c-v*Math.cos(inclination)*s,v*Math.sin(inclination)*verticalScale,u*s+v*Math.cos(inclination)*c];}
+  function orbitPosition(a,node=nodeAngle){const x=-radius*Math.cos(a),z=radius*Math.sin(a),c=Math.cos(node),s=-Math.sin(node),u=x*c+z*s,v=-x*s+z*c;return [u*c-v*Math.cos(inclination)*s,v*Math.sin(inclination)*verticalScale,u*s+v*Math.cos(inclination)*c];}
   function moonPosition(){return orbitPosition(visualDay/cycle*tau);}
   function physicalPosition(position){return [position[0],position[1]/verticalScale,position[2]];}
-  function shadowInfo(moon){const d=Math.hypot(moon[1],moon[2]),r=Math.max(0,orbitShadow[1]-orbitShadow[2]*moon[0]),p=orbitShadow[1]+orbitShadow[3]*moon[0],m=phaseMoonRadius;let stage='none',coverage=0;if(moon[0]>0){stage=d+m<=r?'total':d<r+m?'partial':d<p+m?'penumbral':'none';if(d<=r-m)coverage=100;else if(d<r+m){const ca=Math.acos(Math.max(-1,Math.min(1,(d*d+r*r-m*m)/(2*d*r)))),cb=Math.acos(Math.max(-1,Math.min(1,(d*d+m*m-r*r)/(2*d*m))));coverage=Math.round((r*r*ca+m*m*cb-.5*Math.sqrt(Math.max(0,(-d+r+m)*(d+r-m)*(d-r+m)*(d+r+m))))/(Math.PI*m*m)*100);}}return {stage,coverage};}
+  function shadowInfo(moon){const d=Math.hypot(moon[1],moon[2]),r=Math.max(0,orbitShadow[1]-orbitShadow[2]*moon[0]),p=orbitShadow[1]+orbitShadow[3]*moon[0],m=moonRadius();let stage='none',coverage=0;if(moon[0]>0){stage=d+m<=r?'total':d<r+m?'partial':d<p+m?'penumbral':'none';if(d<=r-m)coverage=100;else if(d<r+m){const ca=Math.acos(Math.max(-1,Math.min(1,(d*d+r*r-m*m)/(2*d*r)))),cb=Math.acos(Math.max(-1,Math.min(1,(d*d+m*m-r*r)/(2*d*m))));coverage=Math.round((r*r*ca+m*m*cb-.5*Math.sqrt(Math.max(0,(-d+r+m)*(d+r-m)*(d-r+m)*(d+r+m))))/(Math.PI*m*m)*100);}}return {stage,coverage};}
   function shadowCone(inner){const points=[],start=.03,end=6.3;for(let i=0;i<80;i++){const a=i/80*tau,b=(i+1)/80*tau,r0=orbitShadow[1]+(inner?-orbitShadow[2]:orbitShadow[3])*start,r1=orbitShadow[1]+(inner?-orbitShadow[2]:orbitShadow[3])*end,A=[start,r0*Math.cos(a),r0*Math.sin(a)],B=[end,r1*Math.cos(a),r1*Math.sin(a)],C=[start,r0*Math.cos(b),r0*Math.sin(b)],D=[end,r1*Math.cos(b),r1*Math.sin(b)];points.push(...A,...B,...C,...C,...B,...D);}return points;}
-  const phaseInnerCone=shadowCone(true),phaseOuterCone=shadowCone(false);
+  let phaseInnerCone=shadowCone(true),phaseOuterCone=shadowCone(false);
   function drawOrbitShadow(renderer){renderer.triangles(phaseOuterCone,[.29,.40,.67],.075);renderer.triangles(phaseInnerCone,[.52,.16,.22],.16);const edges=[];for(let i=0;i<4;i++){const a=i/4*tau,r=orbitShadow[1]-orbitShadow[2]*6.3;edges.push(0,1.05*Math.cos(a),1.05*Math.sin(a),6.3,r*Math.cos(a),r*Math.sin(a));}renderer.lines(edges,[.85,.34,.36],false,.45);}
-  function syncOrbit(moon){const info=shadowInfo(moon),atFull=visualDay/cycle%1>.46&&visualDay/cycle%1<.54;const titles={none:atFull?'普通满月 · 避开地影':moon[0]<0?'朝向太阳一侧 · 不会发生月食':'未进入地球阴影',penumbral:'半影月食 · 月面变暗',partial:'月偏食 · 地影遮住部分月面',total:'月全食 · 暗红月球'};text(q('[data-orbit-stage]'),titles[info.stage]);text(q('[data-orbit-coverage]'),info.coverage+'%');text(q('[data-orbit-explanation]'),info.stage==='none'?(atFull?'虽然月相接近全圆，但月球从阴影上方经过，太阳光仍能到达月面。':moon[0]<0?'地影在地球背对太阳的一侧。这里的月牙或暗面来自观察角度，并非被地影挡住。':'随着公转，观察角度让亮区增减；进入背向太阳一侧也不等于进入地影。'):info.stage==='total'?'地球挡住直射阳光；穿过地球大气的微弱红光让满月变成暗红色。':info.stage==='partial'?'这是地球影子的圆弧在扫过月面，区别于日常月相的明暗边界。':'地球挡住部分太阳光，月面变暗；几何月相仍接近满月。');root.dataset.orbitStage=info.stage;root.dataset.orbitCoverage=String(info.coverage);root.dataset.moonPosition=moon.map(x=>x.toFixed(4)).join(',');root.dataset.nodeAngle=(nodeAngle*180/Math.PI).toFixed(1);}
+  function syncOrbit(moon){const info=shadowInfo(moon),atFull=visualDay/cycle%1>.46&&visualDay/cycle%1<.54;const titles={none:atFull?'普通满月 · 避开地影':moon[0]<0?'朝向太阳一侧 · 不会发生月食':'未进入地球阴影',penumbral:'半影月食 · 月面变暗',partial:'月偏食 · 地影遮住部分月面',total:'月全食 · 暗红月球'};text(q('[data-orbit-stage]'),titles[info.stage]);text(q('[data-orbit-coverage]'),info.coverage+'%');text(q('[data-orbit-explanation]'),info.stage==='none'?(atFull?'虽然月相接近全圆，但月球从阴影上方或下方经过，太阳光仍能到达月面。':moon[0]<0?'地影在地球背对太阳的一侧。这里的月牙或暗面来自观察角度，并非被地影挡住。':'随着公转，观察角度让亮区增减；进入背向太阳一侧也不等于进入地影。'):info.stage==='total'?'地球挡住直射阳光；穿过地球大气的微弱红光让满月变成暗红色。':info.stage==='partial'?'这是地球影子的圆弧在扫过月面，区别于日常月相的明暗边界。':'地球挡住部分太阳光，月面变暗；几何月相仍接近满月。');root.dataset.orbitStage=info.stage;root.dataset.orbitCoverage=String(info.coverage);root.dataset.moonPosition=moon.map(x=>x.toFixed(4)).join(',');root.dataset.nodeAngle=(nodeAngle*180/Math.PI).toFixed(1);}
 
   const vertex=`precision mediump float;attribute vec3 aPosition;attribute vec3 aNormal;uniform mat4 uVP;uniform mat4 uModel;varying vec3 vLocal;varying vec3 vNormal;varying vec3 vWorld;void main(){vLocal=aPosition;vec4 world=uModel*vec4(aPosition,1.0);vWorld=world.xyz;vNormal=mat3(uModel)*aNormal;gl_Position=uVP*world;}`;
   const fragment=`precision mediump float;varying vec3 vLocal;varying vec3 vNormal;varying vec3 vWorld;uniform vec3 uColor;uniform vec3 uSecond;uniform vec3 uCloud;uniform vec3 uNight;uniform vec3 uEye;uniform vec3 uLight;uniform vec4 uCraters[24];uniform float uKind;uniform float uAlpha;uniform float uExplain;uniform vec3 uToEarth;uniform vec4 uShadow;uniform vec3 uShadowOffset;uniform mat4 uModel;
@@ -55,6 +61,7 @@
     function positions(b,normals=true){gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.enableVertexAttribArray(attrs.p);gl.vertexAttribPointer(attrs.p,3,gl.FLOAT,false,0,0);if(normals){gl.enableVertexAttribArray(attrs.n);gl.vertexAttribPointer(attrs.n,3,gl.FLOAT,false,0,0);}else{gl.disableVertexAttribArray(attrs.n);gl.vertexAttrib3f(attrs.n,0,1,0);}}
     const api={gl,vp:identity(),eye:[0,0,20],width:0,height:0,
       begin(vp,eye,explain=0,toEarth=[1,0,0],shadow=null){const dpr=Math.min(window.devicePixelRatio||1,2),w=Math.max(1,Math.round(element.clientWidth*dpr)),h=Math.max(1,Math.round(element.clientHeight*dpr));if(element.width!==w||element.height!==h){element.width=w;element.height=h;}api.width=element.clientWidth;api.height=element.clientHeight;api.vp=vp;api.eye=eye;gl.viewport(0,0,w,h);gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);gl.enable(gl.DEPTH_TEST);gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.useProgram(program);gl.uniformMatrix4fv(u.VP,false,vp);gl.uniform3fv(u.Eye,eye);gl.uniform3fv(u.Light,[-1,0,0]);gl.uniform1f(u.Explain,explain);gl.uniform3fv(u.ToEarth,toEarth);gl.uniform4fv(u.Shadow,shadow?.parameters||[0,1.05,0,0]);gl.uniform3fv(u.ShadowOffset,shadow?.offset||[0,0,0]);gl.uniform3fv(u.Night,palette.night);gl.uniform3fv(u.Cloud,palette.cloud);gl.uniform4fv(u['Craters[0]'],craterValues);},
+      light(direction){gl.useProgram(program);gl.uniform3fv(u.Light,direction);},
       sphere(p,size,kind,color,second,rot=0){positions(sphereBuffer);gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER,indexBuffer);gl.uniformMatrix4fv(u.Model,false,model(p,size,rot));gl.uniform1f(u.Kind,kind);gl.uniform1f(u.Alpha,1);gl.uniform3fv(u.Color,color);gl.uniform3fv(u.Second,second||color);gl.drawElements(gl.TRIANGLES,indices.length,gl.UNSIGNED_SHORT,0);},
       lines(points,color,loop=false,alpha=1){positions(lineBuffer,false);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(points),gl.DYNAMIC_DRAW);gl.uniformMatrix4fv(u.Model,false,identity());gl.uniform1f(u.Kind,4);gl.uniform1f(u.Alpha,alpha);gl.uniform3fv(u.Color,color);gl.drawArrays(loop?gl.LINE_LOOP:gl.LINES,0,points.length/3);},
       triangles(points,color,alpha=.15){positions(lineBuffer,false);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(points),gl.DYNAMIC_DRAW);gl.uniformMatrix4fv(u.Model,false,identity());gl.uniform1f(u.Kind,4);gl.uniform1f(u.Alpha,alpha);gl.uniform3fv(u.Color,color);gl.depthMask(false);gl.drawArrays(gl.TRIANGLES,0,points.length/3);gl.depthMask(true);},
@@ -76,7 +83,7 @@
     if(activeMode!=='phase')return;
     const moon=moonPosition(),physicalMoon=physicalPosition(moon),rot=visualDay/cycle*tau+Math.PI/2,w=canvas.clientWidth,h=canvas.clientHeight;
     let eye,target,fov=view==='side'?.8:.72;
-    if(view==='earth'){eye=[0,0,0];target=physicalMoon;fov=.45;}
+    if(view==='earth'){eye=[0,0,0];target=physicalMoon;fov=.45*moonRadius()/phaseMoonRadius;}
     else{target=[-1.45,.65,0];const narrow=Math.max(1,1.35/(w/h)),d=distance*narrow;eye=view==='top'?[-1.45,.9999*d,.01*d]:view==='side'?[-1.45,.65,d]:[target[0]+d*Math.cos(elevation)*Math.sin(azimuth),d*Math.sin(elevation),d*Math.cos(elevation)*Math.cos(azimuth)];}
     world.begin(multiply(perspective(fov,w/h),lookAt(eye,target)),eye,0,[1,0,0],{parameters:orbitShadow,offset:view==='earth'?sub(moon,physicalMoon):[0,0,0]});
     if(view!=='earth'){
@@ -90,22 +97,23 @@
       world.sphere([-7.2,0,0],1.35,2,palette.sun,palette.hot);
       world.sphere([0,0,0],1.05,1,palette.earth,palette.land,visualDay/cycle*tau*3);
     }
-    world.sphere(view==='earth'?physicalMoon:moon,.77,0,palette.moon,palette.moon,rot);
+    world.sphere(view==='earth'?physicalMoon:moon,moonRadius(),0,palette.moon,palette.moon,rot);
     const direction=unit(moon),person=direction.map(v=>v*1.13);
     if(view!=='earth'){
       world.sphere(person,.07,2,palette.sight,palette.sight);
       const u=unit(cross(direction,[0,1,0])),v=cross(u,direction),sight=[];
-      const start=person,end=sub(moon,direction.map(x=>x*.77));sight.push(...start,...end);
-      for(let i=0;i<4;i++){const a=i/4*tau,point=moon.map((x,k)=>x+.77*(u[k]*Math.cos(a)+v[k]*Math.sin(a)));sight.push(...start,...point);}
+      const start=person,end=sub(moon,direction.map(x=>x*moonRadius()));sight.push(...start,...end);
+      for(let i=0;i<4;i++){const a=i/4*tau,point=moon.map((x,k)=>x+moonRadius()*(u[k]*Math.cos(a)+v[k]*Math.sin(a)));sight.push(...start,...point);}
       world.lines(sight,palette.sight,false,.72);
     }
     label('observer',person.map((x,i)=>x+(i===1?.18:0)));
     label('sun',[-7.2,-1.65,0]);label('earth',[0,-1.34,0]);label('moon',[moon[0],moon[1]-.99,moon[2]]);
     label('umbra',[5.8,1.1,0]);label('penumbra',[5.8,2.8,0]);if(!showOrbitShadow){q('[data-label=umbra]').hidden=true;q('[data-label=penumbra]').hidden=true;}
-    observer.begin(multiply(perspective(.435,closeup.clientWidth/closeup.clientHeight),lookAt([0,0,0],physicalMoon)),[0,0,0],0,[1,0,0],{parameters:orbitShadow,offset:sub(moon,physicalMoon)});
-    observer.sphere(physicalMoon,.77,0,palette.moon,palette.moon,rot);
+    observer.begin(multiply(perspective(.435*moonRadius()/phaseMoonRadius,closeup.clientWidth/closeup.clientHeight),lookAt([0,0,0],physicalMoon)),[0,0,0],0,[1,0,0],{parameters:orbitShadow,offset:sub(moon,physicalMoon)});
+    observer.sphere(physicalMoon,moonRadius(),0,palette.moon,palette.moon,rot);
     if(q('.phase-principle').open)renderLesson(physicalMoon);
     syncOrbit(moon);
+    if(motion==='annual')renderAnnual(moon);
     root.dataset.angle=azimuth.toFixed(4);root.dataset.distance=distance.toFixed(3);root.dataset.view=view;root.dataset.visualDay=visualDay.toFixed(4);
     dirty=false;
   }
@@ -161,29 +169,31 @@
   phases.forEach((p,i)=>{const b=document.createElement('button');b.type='button';b.className='phase-button';b.dataset.phaseIndex=i;attr(b,'aria-pressed',false);b.append(phaseIcon(i));const label=document.createElement('span');label.textContent=p;b.append(label);b.addEventListener('click',()=>selectDay(cycle*i/8,true));q('.m3-presets').append(b);phaseButtons.push(b);});
   const views=Array.from(root.querySelectorAll('[data-view]')),turns=Array.from(root.querySelectorAll('[data-turn]'));
   function sync(){const targetMoon=physicalPosition(orbitPosition(day/cycle*tau)),percent=Math.round((1+unit(targetMoon)[0])*50),index=phaseIndex();
-    text(play,playing?'Ⅱ 暂停':'▶ 播放');attr(play,'aria-pressed',playing);speedSelect.value=String(speed);
+    text(play,playing?'Ⅱ 暂停':motion==='annual'?'▶ 播放一年':'▶ 播放');attr(play,'aria-pressed',playing);speedSelect.value=String(speed);
     text(q('[data-phase]'),phases[index]);text(q('[data-light]'),percent+'%');text(q('[data-age]'),day.toFixed(1));text(q('[data-description]'),descriptions[index]);
     slider.value=day.toFixed(2);slider.style.setProperty('--progress',day/cycle*100+'%');attr(slider,'aria-valuetext',`${name()}，距新月 ${day.toFixed(1)} 天，照亮 ${percent}%`);
     phaseButtons.forEach((b,i)=>attr(b,'aria-pressed',i===index));views.forEach(b=>attr(b,'aria-pressed',b.dataset.view===view));turns.forEach(b=>b.disabled=view==='earth');
     attr(canvas,'aria-label',`${view==='earth'?'地球视角的月球':'可旋转的三维日地月场景'}，${name()}，照亮 ${percent}%`);attr(closeup,'aria-label',`地球上看到的${name()}，照亮 ${percent}%`);
     text(q('[data-hint]'),view==='earth'?'月面按真实倾角观察 · 轨道偏移为放大示意':'拖动旋转 · 滚轮 / 双指缩放');
     text(q('[data-view-title]'),view==='earth'?'地球上的观察视角':view==='top'?'俯视轨道 · 高度关系请切换侧看':view==='side'?'侧看倾斜 · 满月是否进入地影':'日 · 地 · 月的空间关系');
-    text(q('[data-status]'),playing?(nodeAngle<1.3&&Math.abs(day/cycle-.5)<.09?'满月附近自动慢放 · 观察阴影扫过':'动画播放中'):tween?'正在切换':'已暂停 · 选择后保持当前月相');
+    text(q('[data-status]'),playing?(isSlow()?'满月附近自动慢放 · 观察阴影扫过':motion==='annual'?'连续一年 · 地球和月球同步前进':'动画播放中'):tween?'正在切换':'已暂停 · 选择后保持当前月相');
+    if(motion==='annual')syncAnnual();
     root.dataset.playing=String(playing);dirty=true;
   }
   function announce(){text(q('[data-announcement]'),`${name()}，距新月 ${day.toFixed(1)} 天，${playing?'播放中':'已暂停'}`);}
-  function save(){try{localStorage.setItem('moon-lab-v3',JSON.stringify({day,speed,view,azimuth,elevation,distance,nodeAngle}));}catch{}}
-  function restore(){try{const p=JSON.parse(localStorage.getItem('moon-lab-v3'));if(!p||typeof p!=='object')return;
+  function save(){try{localStorage.setItem('moon-lab-v4',JSON.stringify({day,speed,view,azimuth,elevation,distance,nodeAngle,motion,yearTime}));}catch{}}
+  function restore(){try{const p=JSON.parse(localStorage.getItem('moon-lab-v4'));if(!p||typeof p!=='object')return;
     if(Number.isFinite(p.day))day=Math.max(0,Math.min(cycle,p.day));speed=[.5,1,2].includes(p.speed)?p.speed:1;view=['orbit','earth','top','side'].includes(p.view)?p.view:'orbit';
-    if(Number.isFinite(p.azimuth))azimuth=p.azimuth;if(Number.isFinite(p.elevation))elevation=Math.max(.12,Math.min(1.45,p.elevation));if(Number.isFinite(p.distance))distance=Math.max(9.5,Math.min(24,p.distance));if(Number.isFinite(p.nodeAngle))nodeAngle=Math.max(0,Math.min(Math.PI/2,p.nodeAngle));refreshOrbit();syncOrbitControls();visualDay=day;
+    if(Number.isFinite(p.azimuth))azimuth=p.azimuth;if(Number.isFinite(p.elevation))elevation=Math.max(.12,Math.min(1.45,p.elevation));if(Number.isFinite(p.distance))distance=Math.max(9.5,Math.min(24,p.distance));if(Number.isFinite(p.nodeAngle))nodeAngle=Math.max(0,Math.min(Math.PI/2,p.nodeAngle));motion=p.motion==='manual'?'manual':'annual';if(Number.isFinite(p.yearTime))yearTime=Math.max(0,Math.min(year,p.yearTime));if(motion==='annual'){day=yearTime%cycle;nodeAngle=nodeAngleAt(yearTime);}refreshOrbit();syncOrbitControls();visualDay=day;
   }catch{}}
   function selectDay(value,smooth=false){playing=false;previous=0;day=Math.max(0,Math.min(cycle,value));
+    if(motion==='annual'){yearTime=Math.min(year,Math.floor(yearTime/cycle)*cycle+day);nodeAngle=nodeAngleAt(yearTime);refreshOrbit();day=yearTime%cycle;smooth=false;}
     if(smooth&&!reduced.matches){let delta=day-visualDay;delta=((delta+cycle*1.5)%cycle)-cycle/2;tween={from:visualDay,delta,start:performance.now(),duration:560};}
     else{tween=null;visualDay=day;}
     sync();announce();save();
   }
   function syncOrbitControls(){const peak=shadowInfo(orbitPosition(Math.PI)),kind=peak.stage==='none'?'ordinary':peak.stage;root.querySelectorAll('[data-orbit-scenario]').forEach(b=>attr(b,'aria-pressed',b.dataset.orbitScenario===kind));const nodeSlider=q('#orbit-node');nodeSlider.value=(nodeAngle*180/Math.PI).toFixed(1);nodeSlider.style.setProperty('--progress',nodeAngle/(Math.PI/2)*100+'%');text(q('[data-orbit-offset]'),`满月处：${{ordinary:'避开地影',total:'穿过本影，可发生月全食',partial:'擦过本影，可发生月偏食',penumbral:'只经过半影'}[kind]}`);attr(nodeSlider,'aria-valuetext',q('[data-orbit-offset]').textContent);dirty=true;}
-  function setNode(angle){nodeAngle=angle;refreshOrbit();syncOrbitControls();sync();save();}
+  function setNode(angle){motion='manual';syncMotionPanels();nodeAngle=angle;refreshOrbit();syncOrbitControls();sync();save();}
   root.querySelectorAll('[data-orbit-scenario]').forEach(b=>b.addEventListener('click',()=>{const maxHeight=radius*Math.sin(inclination)*verticalScale,angles={ordinary:Math.PI/2,total:0,partial:Math.asin(.90/maxHeight),penumbral:Math.asin(2.4/maxHeight)};setNode(angles[b.dataset.orbitScenario]);selectDay(cycle/2);view='side';sync();save();}));
   q('#orbit-node').addEventListener('input',e=>{playing=false;tween=null;visualDay=day;setNode(Number(e.target.value)*Math.PI/180);});
   q('[data-orbit-shadow]').addEventListener('change',e=>{showOrbitShadow=e.target.checked;dirty=true;});
@@ -205,7 +215,7 @@
   q('[data-reset]').addEventListener('click',()=>{view='orbit';azimuth=.32;elevation=.64;distance=14.2;sync();save();});
   q('[data-zoom-in]').addEventListener('click',()=>{distance=Math.max(9.5,distance*.88);dirty=true;save();});
   q('[data-zoom-out]').addEventListener('click',()=>{distance=Math.min(24,distance/ .88);dirty=true;save();});
-  play.addEventListener('click',()=>{if(tween){visualDay=day;tween=null;}playing=!playing;previous=0;sync();announce();save();});
+  play.addEventListener('click',()=>{if(tween){visualDay=day;tween=null;}if(motion==='annual'&&yearTime>=year)setYearTime(0);playing=!playing;previous=0;sync();announce();save();});
   slider.addEventListener('input',()=>selectDay(Number(slider.value)));speedSelect.addEventListener('change',()=>{speed=Number(speedSelect.value);save();});
   const pointers=new Map();let oldPinch=0;
   canvas.addEventListener('pointerdown',e=>{if(view==='earth')return;canvas.setPointerCapture(e.pointerId);pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});oldPinch=0;});
@@ -215,8 +225,57 @@
   canvas.addEventListener('keydown',e=>{if(view==='earth')return;const directions={ArrowLeft:-.15,ArrowRight:.15};if(e.key in directions){e.preventDefault();azimuth+=directions[e.key];dirty=true;save();}});
   const sizeObserver=new ResizeObserver(()=>dirty=true);sizeObserver.observe(canvas);sizeObserver.observe(closeup);sizeObserver.observe(hemisphere);
   reduced.addEventListener('change',e=>{if(e.matches){playing=false;tween=null;visualDay=day;sync();}});
-  restore();sync();render();
-  function animate(now){if(playing&&previous&&!document.hidden){const slow=nodeAngle<1.3&&Math.abs(day/cycle-.5)<.09?.18:1;day=(day+Math.min(now-previous,80)*cycle/36000*speed*slow)%cycle;visualDay=day;sync();}
+  const annualFullMoons=[];
+  function isSlow(){return Math.abs(Math.sin(nodeAngle))<.65&&Math.abs(day/cycle-.5)<.09;}
+  function syncMotionPanels(){orbitShadow=motion==='annual'?annualShadow:manualShadow;phaseInnerCone=shadowCone(true);phaseOuterCone=shadowCone(false);q('[data-manual-lab]').hidden=motion!=='manual';q('[data-annual-content]').hidden=motion!=='annual';root.querySelectorAll('[data-motion]').forEach(b=>attr(b,'aria-pressed',b.dataset.motion===motion));root.dataset.motion=motion;if(motion==='manual')syncOrbitControls();speedSelect.options[1].textContent=motion==='annual'?'1× · 基础 120 秒 / 年':'1× · 基础 36 秒 / 轮';}
+  function setYearTime(value){motion='annual';playing=false;tween=null;previous=0;yearTime=Math.max(0,Math.min(year,value));day=yearTime%cycle;visualDay=day;nodeAngle=nodeAngleAt(yearTime);refreshOrbit();syncMotionPanels();sync();announce();save();}
+  function syncAnnual(){const angle=Math.acos(Math.min(1,Math.abs(Math.cos(nodeAngle))))*180/Math.PI,near=angle<18;
+    text(q('[data-year-date]'),`示意第 ${Math.floor(yearTime)+1} 天 · 第 ${Math.floor(yearTime/cycle)+1} 轮月相`);
+    text(q('[data-year-title]'),near?'太阳方向接近交线 · 食季附近':'太阳方向偏离交线');text(q('[data-node-misalignment]'),angle.toFixed(1)+'°');
+    text(q('[data-year-reason]'),near?'满月时，月球有机会从地球阴影里穿过。能否发生、发生哪种月食，还要看这次满月与交点的具体位置。':'地球继续绕太阳走，太阳光与影子的方向相对交线发生改变。月球在满月位置仍偏离地影，所以能看见明亮的满月。');
+    text(q('[data-year-play]'),playing?'Ⅱ 暂停一年':yearTime>=year?'↻ 重播一年':'▶ 连续播放一年');attr(q('[data-year-play]'),'aria-pressed',playing);q('#year-speed').value=String(speed);
+    const yearSlider=q('#year-time');yearSlider.value=yearTime.toFixed(2);yearSlider.style.setProperty('--progress',yearTime/year*100+'%');attr(yearSlider,'aria-valuetext',`示意第 ${Math.floor(yearTime)+1} 天，太阳方向偏离交线 ${angle.toFixed(1)} 度`);
+    text(q('[data-year-status]'),playing?(isSlow()?'满月附近自动慢放':'同步运行中'):yearTime>=year?'一年结束 · 可以重播':'已暂停 · 拖动全年时间轴');
+    root.querySelectorAll('[data-full-moon]').forEach((b,i)=>attr(b,'aria-pressed',Math.floor(yearTime/cycle)===i));
+    q('[data-year-next]').disabled=!annualFullMoons.some(m=>m.peak>yearTime+.02);
+    root.dataset.yearTime=yearTime.toFixed(4);root.dataset.earthAngle=earthAngleAt(yearTime).toFixed(5);root.dataset.nodeMisalignment=angle.toFixed(3);
+  }
+  function renderAnnual(moon){if(!annualRenderer||!q('.annual-world').clientWidth)return;const space=annualRenderer,el=q('.annual-world'),aspect=el.clientWidth/el.clientHeight,wide=Math.max(1,1.6/aspect),eye=[0,22*wide,18*wide];
+    const a=earthAngleAt(yearTime),earth=[11*Math.cos(a),0,11*Math.sin(a)],c=Math.cos(a),s=Math.sin(a),scale=.36;
+    const toGlobal=p=>[earth[0]+scale*(p[0]*c-p[2]*s),scale*p[1],earth[2]+scale*(p[0]*s+p[2]*c)];
+    const globalMoon=toGlobal(moon),nodeDir=[Math.cos(nodeAngle-a),0,-Math.sin(nodeAngle-a)];
+    space.begin(multiply(perspective(.85,aspect),lookAt(eye,[0,0,0])),eye);
+    const path=[];for(let i=0;i<192;i++){const t=i/192*tau;path.push(11*Math.cos(t),0,11*Math.sin(t));}space.lines(path,palette.orbit,true,.65);const trail=[];for(let i=0;i<24;i++){const ta=earthAngleAt(yearTime-cycle+i/24*cycle),tb=earthAngleAt(yearTime-cycle+(i+1)/24*cycle);trail.push(11*Math.cos(ta),0,11*Math.sin(ta),11*Math.cos(tb),0,11*Math.sin(tb));}space.lines(trail,palette.ray,false,.92);
+    const seasons=[];for(let i=0;i<240;i++){const t=i/240*year;if(Math.abs(Math.sin(nodeAngleAt(t)))>.22)continue;const aa=earthAngleAt(t),bb=earthAngleAt(t+year/240);seasons.push(11*Math.cos(aa),0,11*Math.sin(aa),11*Math.cos(bb),0,11*Math.sin(bb));}space.lines(seasons,[.94,.47,.28],false,.95);
+    space.lines([0,0,0,...earth],palette.ray,false,.8);space.lines([...earth.map((v,i)=>v-nodeDir[i]*3.4),...earth.map((v,i)=>v+nodeDir[i]*3.4)],palette.sight,false,1);
+    const local=[];for(let i=0;i<128;i++)local.push(...toGlobal(orbitPosition(i/128*tau)));space.lines(local,[.52,.62,.73],true,.75);
+    // The ecliptic projection of the orbit's angular momentum stays fixed except for slow nodal precession.
+    space.sphere([0,0,0],1.85,2,palette.sun,palette.hot);space.light(unit(earth.map(x=>-x)));space.sphere(earth,.86,1,palette.earth,palette.land,yearTime*.12);
+    const current=shadowInfo(moon).stage,color=current==='total'?[.48,.13,.055]:current==='partial'?[.58,.40,.32]:palette.moon;space.sphere(globalMoon,.23,0,color,color,visualDay/cycle*tau+Math.PI/2);
+    const labels={sun:[0,-2.1,0],earth:[earth[0],-1.5,earth[2]],path:[-8.3,-.6,6.2],node:earth.map((v,i)=>v+nodeDir[i]*3.5+(i===1?.3:0))};
+    for(const [name,p]of Object.entries(labels)){const label=q(`[data-annual-label=${name}]`),point=space.project(p);label.hidden=!point.visible;const pad=name==='node'?40:30;label.style.left=Math.max(pad,Math.min(el.clientWidth-pad,point.x))+'px';label.style.top=Math.max(24,Math.min(el.clientHeight-22,point.y))+'px';}
+    root.dataset.globalEarth=earth.map(x=>x.toFixed(4)).join(',');root.dataset.globalNode=nodeDir.map(x=>x.toFixed(5)).join(',');
+    attr(el,'aria-label',`地球绕太阳的全年总览，示意第 ${Math.floor(yearTime)+1} 天，金色为太阳方向，青色为缓慢转动的月球轨道交线`);
+  }
+  function setupAnnual(){try{annualRenderer=Renderer(q('.annual-world'));}catch(e){q('[data-error]').hidden=false;q('[data-error]').textContent=e.message;}
+    const rank={none:0,penumbral:1,partial:2,total:3},names={none:'普通满月',penumbral:'半影月食',partial:'月偏食',total:'月全食'};
+    for(let full=cycle/2,index=0;full<year;full+=cycle,index++){let peak=full,stage='none',best=Infinity,maxRank=0;
+      for(let j=-80;j<=80;j++){const t=full+j/80*cycle*.105,moon=orbitPosition(t/cycle*tau,nodeAngleAt(t)),info=shadowInfo(moon),d=Math.hypot(moon[1],moon[2]);if(d<best){best=d;peak=t;}if(rank[info.stage]>maxRank){maxRank=rank[info.stage];stage=info.stage;}}
+      if(stage==='none')peak=full;annualFullMoons.push({full,peak,stage});const b=document.createElement('button');b.type='button';b.dataset.fullMoon=String(index);b.dataset.fullMoonKind=stage;b.className='annual-month';b.innerHTML=`<span>第 ${index+1} 次满月</span><strong>${names[stage]}</strong>`;attr(b,'aria-pressed',false);b.addEventListener('click',()=>{setYearTime(peak);view='side';sync();save();});q('.annual-months').append(b);
+    }
+    root.querySelectorAll('[data-motion]').forEach(b=>b.addEventListener('click',()=>{playing=false;tween=null;previous=0;motion=b.dataset.motion;if(motion==='annual'){setYearTime(yearTime);}else{nodeAngle=Math.PI/2;refreshOrbit();syncOrbitControls();syncMotionPanels();sync();save();}}));
+    q('#year-time').addEventListener('input',e=>setYearTime(Number(e.target.value)));
+    q('[data-year-play]').addEventListener('click',()=>{if(yearTime>=year)setYearTime(0);playing=!playing;previous=0;sync();announce();save();});
+    q('#year-speed').addEventListener('change',e=>{speed=Number(e.target.value);speedSelect.value=String(speed);save();});
+    q('[data-year-next]').addEventListener('click',()=>{const next=annualFullMoons.find(m=>m.peak>yearTime+.02);if(next){setYearTime(next.peak);view='side';sync();save();}});
+    q('[data-year-reset]').addEventListener('click',()=>setYearTime(0));
+    sizeObserver.observe(q('.annual-world'));
+  }
+
+  setupAnnual();restore();if(motion==='annual'){day=yearTime%cycle;visualDay=day;nodeAngle=nodeAngleAt(yearTime);refreshOrbit();}syncMotionPanels();sync();render();
+  function animate(now){if(playing&&previous&&!document.hidden){const slow=isSlow()?.18:1,elapsed=Math.min(now-previous,80)*speed*slow;
+      if(motion==='annual'){yearTime=Math.min(year,yearTime+elapsed*year/120000);if(yearTime===year)playing=false;day=yearTime%cycle;nodeAngle=nodeAngleAt(yearTime);refreshOrbit();}
+      else day=(day+elapsed*cycle/36000)%cycle;visualDay=day;sync();}
     if(tween){const t=Math.min(1,(now-tween.start)/tween.duration),ease=t*t*(3-2*t);visualDay=tween.from+tween.delta*ease;dirty=true;if(t===1){tween=null;visualDay=day;text(q('[data-status]'),'已暂停 · 选择后保持当前月相');}}
     if(activeMode==='eclipse')eclipse?.tick(now);
     previous=now;if(eduCameraTween)dirty=true;if(dirty)render();frameId=requestAnimationFrame(animate);
