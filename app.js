@@ -184,7 +184,7 @@
   }
   function syncOrbitControls(){const peak=shadowInfo(orbitPosition(Math.PI)),kind=peak.stage==='none'?'ordinary':peak.stage;root.querySelectorAll('[data-orbit-scenario]').forEach(b=>attr(b,'aria-pressed',b.dataset.orbitScenario===kind));const nodeSlider=q('#orbit-node');nodeSlider.value=(nodeAngle*180/Math.PI).toFixed(1);nodeSlider.style.setProperty('--progress',nodeAngle/(Math.PI/2)*100+'%');text(q('[data-orbit-offset]'),`满月处：${{ordinary:'避开地影',total:'穿过本影，可发生月全食',partial:'擦过本影，可发生月偏食',penumbral:'只经过半影'}[kind]}`);attr(nodeSlider,'aria-valuetext',q('[data-orbit-offset]').textContent);dirty=true;}
   function setNode(angle){nodeAngle=angle;refreshOrbit();syncOrbitControls();sync();save();}
-  root.querySelectorAll('[data-orbit-scenario]').forEach(b=>b.addEventListener('click',()=>{const maxHeight=radius*Math.sin(inclination)*verticalScale,angles={ordinary:Math.PI/2,total:0,partial:Math.asin(.90/maxHeight),penumbral:Math.asin(2.1/maxHeight)};setNode(angles[b.dataset.orbitScenario]);selectDay(cycle/2);view='side';sync();save();}));
+  root.querySelectorAll('[data-orbit-scenario]').forEach(b=>b.addEventListener('click',()=>{const maxHeight=radius*Math.sin(inclination)*verticalScale,angles={ordinary:Math.PI/2,total:0,partial:Math.asin(.90/maxHeight),penumbral:Math.asin(2.4/maxHeight)};setNode(angles[b.dataset.orbitScenario]);selectDay(cycle/2);view='side';sync();save();}));
   q('#orbit-node').addEventListener('input',e=>{playing=false;tween=null;visualDay=day;setNode(Number(e.target.value)*Math.PI/180);});
   q('[data-orbit-shadow]').addEventListener('change',e=>{showOrbitShadow=e.target.checked;dirty=true;});
   q('[data-play-cycle]').addEventListener('click',()=>{selectDay(0);playing=true;previous=0;sync();});
