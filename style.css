@@ -31,3 +31,5 @@ main{width:min(1900px,100%);margin:auto;padding:26px clamp(16px,2.4vw,46px) 20px
 @media(min-width:1700px){.annual-grid{grid-template-columns:minmax(300px,.72fr) minmax(280px,1fr)}}
 @media(max-width:900px){.annual-grid{grid-template-columns:minmax(260px,1fr) minmax(220px,1fr)}}
 @media(max-width:760px){.annual-grid{grid-template-columns:1fr}}
+.view-switch{flex-wrap:wrap}#orbit-scene{scroll-margin-top:16px}
+@media(max-width:760px){.view-switch button{white-space:normal}.light-key{max-width:80%;line-height:1.7}}
